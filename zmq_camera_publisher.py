@@ -15,12 +15,12 @@ Gst.init(None)
 
 
 class GstCamera(object):
-    
+
     def __init__(self, sensor_id=0, sensor_mode=0, width=224, height=224, fps=21, capture_width=816, capture_height=616):
         
         self.mainloop = GObject.MainLoop()
         
-        print(sensor_mode)
+        # print(sensor_mode)
         GST_STRING = 'nvarguscamerasrc sensor_id={sensor_id} sensor-mode={sensor_mode} '\
             '! video/x-raw(memory:NVMM), width={capture_width}, height={capture_height}, format=(string)NV12, framerate=(fraction){fps}/1 !'\
             ' nvvidconv '\
@@ -36,7 +36,7 @@ class GstCamera(object):
             capture_width=capture_width,
             capture_height=capture_height
         )
-        print(GST_STRING)
+        # print(GST_STRING)
         
         self.pipeline = Gst.parse_launch(GST_STRING)
         

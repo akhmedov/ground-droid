@@ -28,7 +28,7 @@ def image_preprocessing(frame: np.array):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--vision', choices=['left', 'right', 'stereo'], help='vision camera mode')
+parser.add_argument('--vision', choices=['off', 'left', 'right', 'stereo'], default='left', help='vision camera mode')
 args = parser.parse_args()
 
 left_camera, right_camera, image = None, None, None
@@ -52,6 +52,12 @@ while True:
     elif right_camera:
         image = image_preprocessing(right_camera.value)
         cv2.imshow('Right camera image', image)
+    else:
+        dumpy = np.zeros((300, 300, 3))
+        dumpy = cv2.putText(dumpy, 'No image', (80, 150),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.imshow('No camera image', dumpy)
 
     key = cv2.waitKey(1)
     if ord('0') <= key <= ord('9'):
