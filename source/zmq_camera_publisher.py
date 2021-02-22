@@ -21,13 +21,12 @@ class GstCamera(object):
         self.mainloop = GObject.MainLoop()
         
         # print(sensor_mode)
-        GST_STRING = 'nvarguscamerasrc sensor_id={sensor_id} sensor-mode={sensor_mode} '\
-            '! video/x-raw(memory:NVMM), width={capture_width}, height={capture_height}, format=(string)NV12, framerate=(fraction){fps}/1 !'\
-            ' nvvidconv '\
-            '! video/x-raw, width=(int){width}, height=(int){height}, format=(string)BGRx !'\
-            ' videoconvert '\
-            '! video/x-raw, format=(string)BGR !'\
-            ' appsink name=sink'.format(
+        GST_STRING = 'nvarguscamerasrc sensor_id={sensor_id} sensor-mode={sensor_mode} !'\
+            'video/x-raw(memory:NVMM), width={capture_width}, height={capture_height}, format=(string)NV12, framerate=(fraction){fps}/1 !'\
+            'nvvidconv flip-method=2 ! '\
+            'video/x-raw, width=(int){width}, height=(int){height}, format=(string)BGRx !'\
+            'videoconvert ! video/x-raw, format=(string)BGR !'\
+            'appsink name=sink'.format(
             sensor_id=sensor_id,
             sensor_mode=sensor_mode,
             width=width, 

@@ -37,16 +37,16 @@ class CameraBase(traitlets.HasTraits):
 
 
 class ZmqCamera(CameraBase):
+
+    # value = traitlets.Any(value=np.zeros((300, 400, 3), dtype=np.uint8), default_value=np.zeros((300, 400, 3), dtype=np.uint8))
     
-    value = traitlets.Any(value=np.zeros((224, 224, 3), dtype=np.uint8), default_value=np.zeros((224, 224, 3), dtype=np.uint8))
-    
-    def __init__(self, ip='192.168.31.101', port=1807, *args, **kwargs):
-        self.value = np.zeros((224, 224, 3), dtype=np.uint8)  # set default image
+    def __init__(self, ip='192.168.31.101', port=1807, width=400, height=300, *args, **kwargs):
+        self.value = np.zeros((height, width, 3), dtype=np.uint8)  # set default image
         super().__init__(self, *args, **kwargs)
         self._running = False
         self._ip = ip
         self._port = port
-        self._image_shape = (224, 224, 3)
+        self._image_shape = (height, width, 3)
         self._image_dtype = np.uint8
         self.start()
         atexit.register(self.stop)
