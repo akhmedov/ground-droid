@@ -1,19 +1,17 @@
+import os
+import sys
 import cv2
 import time
 import argparse
 import numpy as np
+
 from zmq_motor import ZmqMotor
 from gst_camera import ZmqCamera
 from calibration_store import load_stereo_coefficients
+from constants import EDGE_STATION_IP, LEFT_CAMERA_PORT, RIGHT_CAMERA_PORT, \
+    MOTOR_CTL_PORT, WIDTH, HEIGHT, STREAMING_FPS, EXTRINSIC
 
 SPEED = 0.1
-EDGE_STATION_IP = '192.168.31.101' # '192.168.2.3'
-LEFT_CAMERA_PORT = 1807
-RIGHT_CAMERA_PORT = 1808
-MOTOR_CTL_PORT = 3434
-WIDTH = 400
-HEIGHT = 300
-EXTRINSIC = 'calibration_data/extrinsic.xml'
 K1, D1, K2, D2, R, T, E, F, R1, R2, P1, P2, Q = load_stereo_coefficients(EXTRINSIC)
 IMAGE_SEPARATOR = np.zeros(shape=(HEIGHT, 10, 3), dtype=np.uint8)
 IMAGE_SEPARATOR[0::5, :] = 255, 255, 255
@@ -49,6 +47,8 @@ def print_user_manual():
 
 
 def image_preproc(img, scale=1.5):
+    str_time = time.strftime("%H:%M:%S", time.gmtime(time.time()))
+    img = cv2.putText(img, str_time, (130, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,cv2.LINE_AA)
     width = int(img.shape[1] * scale)
     height = int(img.shape[0] * scale)
     return cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
@@ -56,9 +56,27 @@ def image_preproc(img, scale=1.5):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--vision', choices=['off', 'left', 'right', 'stereo', 'depth'], default='left', help='vision camera mode')
+parser.add_argument('--dash', type=str, help='path to viddeo file saving (mp4 format)')
 args = parser.parse_args()
 
-left_camera, right_camera, image, left_matcher, right_matcher = None, None, None, None, None
+video_writer = None
+if args.dash:
+    file_path = args.dash
+    if not os.path.splitext(file_path)[1]:
+        file_path = file_path + '.mp4'
+    if os.path.splitext(file_path)[1] != '.mp4':
+        print('Only mp4 format is accseptable')
+        sys.exit()
+    if os.path.isfile(file_path):
+        print('File exists: ', file_path)
+        sys.exit()
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    shape = int(1.5*(2*WIDTH+10)) if args.vision == 'stereo' or args.vision == 'depth' else int(1.5 * WIDTH), int(1.5 * HEIGHT)
+    video_writer = cv2.VideoWriter(file_path, fourcc, STREAMING_FPS, shape)
+
+image, label = None, 'No image'
+left_camera, right_camera = None, None
+left_matcher, right_matcher = None, None
 motor_driver = ZmqMotor(server_ip=EDGE_STATION_IP, server_port=MOTOR_CTL_PORT)
 if args.vision == 'left' or args.vision == 'stereo' or args.vision == 'depth':
     left_camera = ZmqCamera(ip=EDGE_STATION_IP, port=LEFT_CAMERA_PORT, width=WIDTH, height=HEIGHT)
@@ -80,6 +98,7 @@ if args.vision == 'depth':
     )
     right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
 
+
 time.sleep(1)
 print_user_manual()
 
@@ -90,25 +109,25 @@ while True:
         leftMapX, leftMapY = cv2.initUndistortRectifyMap(K1, D1, R1, P1, (WIDTH, HEIGHT), cv2.CV_32FC1)
         left_rectified = cv2.remap(left_camera.value, leftMapX, leftMapY, cv2.INTER_LINEAR, cv2.BORDER_CONSTANT)
         depth = cv2.cvtColor(depth[..., np.newaxis], cv2.COLOR_GRAY2RGB)
-        stacked = np.hstack((left_rectified, IMAGE_SEPARATOR, depth))
-        stacked = image_preproc(stacked)
-        cv2.imshow('Stereo camera image', stacked)
+        image = np.hstack((left_rectified, IMAGE_SEPARATOR, depth))
+        label = 'Left camera image and its depth mapping'
     elif left_camera and right_camera:
-        stacked = np.hstack((left_camera.value, IMAGE_SEPARATOR, right_camera.value))
-        stacked = image_preproc(stacked)
-        cv2.imshow('Stereo camera image', stacked)
+        image = np.hstack((left_camera.value, IMAGE_SEPARATOR, right_camera.value))
+        label = 'Stereo camera image'
     elif left_camera:
-        image = image_preproc(left_camera.value)
-        cv2.imshow('Left camera image', image)
+        image = left_camera.value
+        label = 'Left camera image'
     elif right_camera:
-        image = image_preproc(right_camera.value)
-        cv2.imshow('Right camera image', image)
+        image = right_camera.value
+        label = 'Right camera image'
     else:
-        dumpy = np.zeros((300, 400, 3))
-        dumpy = cv2.putText(dumpy, 'No image', (130, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1,
-                            (0, 0, 255), 2, cv2.LINE_AA)
-        cv2.imshow('No camera image', dumpy)
+        image = np.zeros((300, 400, 3), dtype=np.uint8)
+        image = cv2.putText(image, 'No image', (130, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+    image = image_preproc(image)
+    if video_writer:
+        video_writer.write(image)
+    cv2.imshow(label, image)
 
     key = cv2.waitKey(1)
     if ord('0') <= key <= ord('9'):
@@ -122,6 +141,8 @@ while True:
     elif key == ord('d'):
         motor_driver.right(SPEED)
     elif key == ord('q'):
+        if video_writer:
+            video_writer.release()
         if left_camera:
             left_camera.stop()
         if right_camera:
