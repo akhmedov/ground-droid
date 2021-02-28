@@ -9,19 +9,19 @@ from zmq_motor import ZmqMotor
 from gst_camera import ZmqCamera
 from calibration_store import load_stereo_coefficients
 from constants import EDGE_STATION_IP, LEFT_CAMERA_PORT, RIGHT_CAMERA_PORT, \
-    MOTOR_CTL_PORT, WIDTH, HEIGHT, STREAMING_FPS, EXTRINSIC
+    MOTOR_CTL_PORT, IMG_WIDTH, IMG_HEIGHT, STREAMING_FPS, EXTRINSIC
 
 SPEED = 0.1
 K1, D1, K2, D2, R, T, E, F, R1, R2, P1, P2, Q = load_stereo_coefficients(EXTRINSIC)
-IMAGE_SEPARATOR = np.zeros(shape=(HEIGHT, 10, 3), dtype=np.uint8)
+IMAGE_SEPARATOR = np.zeros(shape=(IMG_HEIGHT, 10, 3), dtype=np.uint8)
 IMAGE_SEPARATOR[0::5, :] = 255, 255, 255
 WINDOW_SIZE = 3
 
 
 def depth_map_left(left_frame, right_frame, lmbda=80000, sigma=1.3):
-    left_map_x, left_map_y = cv2.initUndistortRectifyMap(K1, D1, R1, P1, (WIDTH, HEIGHT), cv2.CV_32FC1)
+    left_map_x, left_map_y = cv2.initUndistortRectifyMap(K1, D1, R1, P1, (IMG_WIDTH, IMG_HEIGHT), cv2.CV_32FC1)
     left_rectified = cv2.remap(left_frame, left_map_x, left_map_y, cv2.INTER_LINEAR, cv2.BORDER_CONSTANT)
-    right_map_x, right_map_y = cv2.initUndistortRectifyMap(K2, D2, R2, P2, (WIDTH, HEIGHT), cv2.CV_32FC1)
+    right_map_x, right_map_y = cv2.initUndistortRectifyMap(K2, D2, R2, P2, (IMG_WIDTH, IMG_HEIGHT), cv2.CV_32FC1)
     right_rectified = cv2.remap(right_frame, right_map_x, right_map_y, cv2.INTER_LINEAR, cv2.BORDER_CONSTANT)
     gray_rectified_left = cv2.cvtColor(left_rectified, cv2.COLOR_BGR2GRAY)
     gray_rectified_right = cv2.cvtColor(right_rectified, cv2.COLOR_BGR2GRAY)
@@ -47,8 +47,8 @@ def print_user_manual():
 
 
 def image_preproc(img, scale=1.5):
-    str_time = time.strftime("%H:%M:%S", time.gmtime(time.time()))
-    img = cv2.putText(img, str_time, (130, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,cv2.LINE_AA)
+    # str_time = time.strftime("%H:%M:%S", time.gmtime(time.time()))
+    # img = cv2.putText(img, str_time, (130, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,cv2.LINE_AA)
     width = int(img.shape[1] * scale)
     height = int(img.shape[0] * scale)
     return cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
@@ -71,7 +71,10 @@ if args.dash:
         print('File exists: ', file_path)
         sys.exit()
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    shape = int(1.5*(2*WIDTH+10)) if args.vision == 'stereo' or args.vision == 'depth' else int(1.5 * WIDTH), int(1.5 * HEIGHT)
+    if args.vision == 'stereo' or args.vision == 'depth':
+        shape = int(1.5*(2*IMG_WIDTH+10)), int(1.5 * IMG_HEIGHT)
+    else:
+        shape = int(1.5 * IMG_WIDTH), int(1.5 * IMG_HEIGHT)
     video_writer = cv2.VideoWriter(file_path, fourcc, STREAMING_FPS, shape)
 
 image, label = None, 'No image'
@@ -79,9 +82,9 @@ left_camera, right_camera = None, None
 left_matcher, right_matcher = None, None
 motor_driver = ZmqMotor(server_ip=EDGE_STATION_IP, server_port=MOTOR_CTL_PORT)
 if args.vision == 'left' or args.vision == 'stereo' or args.vision == 'depth':
-    left_camera = ZmqCamera(ip=EDGE_STATION_IP, port=LEFT_CAMERA_PORT, width=WIDTH, height=HEIGHT)
+    left_camera = ZmqCamera(ip=EDGE_STATION_IP, port=LEFT_CAMERA_PORT, width=IMG_WIDTH, height=IMG_HEIGHT)
 if args.vision == 'right' or args.vision == 'stereo' or args.vision == 'depth':
-    right_camera = ZmqCamera(ip=EDGE_STATION_IP, port=RIGHT_CAMERA_PORT, width=WIDTH, height=HEIGHT)
+    right_camera = ZmqCamera(ip=EDGE_STATION_IP, port=RIGHT_CAMERA_PORT, width=IMG_WIDTH, height=IMG_HEIGHT)
 if args.vision == 'depth':
     left_matcher = cv2.StereoSGBM_create(
         minDisparity=-1,
@@ -106,12 +109,15 @@ while True:
 
     if left_camera and right_camera and left_matcher and right_matcher:
         depth = depth_map_left(left_camera.value, right_camera.value)
-        leftMapX, leftMapY = cv2.initUndistortRectifyMap(K1, D1, R1, P1, (WIDTH, HEIGHT), cv2.CV_32FC1)
+        leftMapX, leftMapY = cv2.initUndistortRectifyMap(K1, D1, R1, P1, (IMG_WIDTH, IMG_HEIGHT), cv2.CV_32FC1)
         left_rectified = cv2.remap(left_camera.value, leftMapX, leftMapY, cv2.INTER_LINEAR, cv2.BORDER_CONSTANT)
         depth = cv2.cvtColor(depth[..., np.newaxis], cv2.COLOR_GRAY2RGB)
         image = np.hstack((left_rectified, IMAGE_SEPARATOR, depth))
         label = 'Left camera image and its depth mapping'
     elif left_camera and right_camera:
+        print(left_camera.value.shape)
+        print(IMAGE_SEPARATOR.shape)
+        print(right_camera.value.shape)
         image = np.hstack((left_camera.value, IMAGE_SEPARATOR, right_camera.value))
         label = 'Stereo camera image'
     elif left_camera:

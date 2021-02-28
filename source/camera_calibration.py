@@ -6,21 +6,24 @@ import os
 import glob
 import sys
 import re
+
 from gst_camera import ZmqCamera
 from calibration_store import load_coefficients, save_coefficients, save_stereo_coefficients, load_stereo_coefficients
+from constants import LEFT_CAMERA_PORT, RIGHT_CAMERA_PORT, IMG_WIDTH, IMG_HEIGHT, EXTRINSIC
 
-
-IMG_WIDTH = 400
-IMG_HEIGHT = 300
 CHESSBOARD_WIDTH = 7
 CHESSBOARD_HEIGHT = 7
+CHESSBOARD_PATTERS_SIZE = 0.0309
 CALIB_IMG_DIR = 'calibration_frames_good/'
 LEFT_INTRINSIC = 'calibration_data/left_input.xml'
 RIGHT_INTRINSIC = 'calibration_data/right_input.xml'
-EXTRINSIC = 'calibration_data/extrinsic.xml'
 
 
-def write_frames(dir_name, height, width, edge_server_ip='127.0.0.1', left_cam_port=1807, right_cam_port=1808, duration=60):
+def write_frames(dir_name, height=IMG_HEIGHT, width=IMG_WIDTH,
+                 edge_server_ip='127.0.0.1',
+                 left_cam_port=LEFT_CAMERA_PORT,
+                 right_cam_port=RIGHT_CAMERA_PORT,
+                 duration=60):
     left_camera = ZmqCamera(ip=edge_server_ip, port=left_cam_port, height=height, width=width)
     right_camera = ZmqCamera(ip=edge_server_ip, port=right_cam_port, height=height, width=width)
     start_moment = time.time()
@@ -60,7 +63,7 @@ def validate_calibration_images(dir_name):
     return left, right
 
 
-def define_chessboard_corners_3d(items, chess_square_size=0.0309, chess_width=7, chess_height=7):
+def define_chessboard_corners_3d(items, chess_square_size=CHESSBOARD_PATTERS_SIZE, chess_width=CHESSBOARD_WIDTH, chess_height=CHESSBOARD_HEIGHT):
     """Real 3D coordinates of chessboard corners."""
     objp = np.zeros((chess_height * chess_width, 3), np.float32)
     objp[:, :2] = np.mgrid[0:chess_width, 0:chess_height].T.reshape(-1, 2)
@@ -68,7 +71,7 @@ def define_chessboard_corners_3d(items, chess_square_size=0.0309, chess_width=7,
     return [objp] * items
 
 
-def find_chessboard_corners_2d(images_path, window_size, find_flags=None, chess_width=7, chess_height=7):
+def find_chessboard_corners_2d(images_path, window_size, find_flags=None, chess_width=CHESSBOARD_WIDTH, chess_height=CHESSBOARD_HEIGHT):
     """Finds 2D coordinates of chessboard corners in image plane."""
     imgpoints = dict()
     criteria = cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001
@@ -146,7 +149,7 @@ def draw_chess_board_pattern():
         cv2.imshow(str(idx_left) + ' ' + str(idx_right), stacked)
         time.sleep(2)
         cv2.waitKey(500)
-    time.sleep(99999999)
+    time.sleep(9999)
     cv2.destroyAllWindows()
 
 
